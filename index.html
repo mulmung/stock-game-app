@@ -1277,6 +1277,135 @@ function bind(){$('startBtn').addEventListener('click',start);$('startBtn').addE
 function collapseExpandedPanels(){state.stockRows={};state.holdRows={};state.holdDetails={};}var __switchTab=switchTab;switchTab=function(t,i){if(tab!==t)collapseExpandedPanels();__switchTab(t,i);};var __switchInfoSub=switchInfoSub;switchInfoSub=function(t){if(infoSub!==t)collapseExpandedPanels();__switchInfoSub(t);};var __switchManageSub=switchManageSub;switchManageSub=function(t){if(manageSub!==t)collapseExpandedPanels();__switchManageSub(t);};function persistBeforeLeave(){try{if(state&&state.joined){syncCurrentPlayer();localStorage.setItem(KEY,JSON.stringify(state))}}catch(e){}if(fbEnabled&&fbUser&&fbDb&&!fbSaveLock&&fbDataReady&&state&&state.joined){saveFirebaseNow()}}
 window.addEventListener('pagehide',persistBeforeLeave);
 window.addEventListener('beforeunload',persistBeforeLeave);
+
+
+/* v129 안정화 패치: 공용 데이터는 작게 쪼개 저장하고, 유저 데이터에는 공용 대용량 차트/설정 저장 금지 */
+function compactHistoryArray(arr, limit, candle){
+  arr=Array.isArray(arr)?arr:[];
+  var sliced=arr.slice(Math.max(0,arr.length-(limit||1440)));
+  return sliced.map(function(x){
+    if(candle){
+      var o=+x.open||+x.close||0,c=+x.close||o,h=+x.high||Math.max(o,c),l=+x.low||Math.min(o,c);
+      return {time:+x.time||Date.now(),open:Math.round(o),close:Math.round(c),high:Math.round(h),low:Math.round(l)};
+    }
+    return {time:+x.time||Date.now(),price:Math.round(+x.price||0)};
+  }).filter(function(x){return x.time&&((candle&&x.close)||(!candle&&x.price))});
+}
+function compactPublicStockFull(s){
+  s=s||{};
+  var price=Math.round(+s.currentPrice||+s.startPrice||1000);
+  var ph=compactHistoryArray(s.priceHistory,1440,false);
+  var ch=compactHistoryArray(s.candleHistory,1440,true);
+  if(!ph.length){for(var i=59;i>=0;i--)ph.push({time:Date.now()-i*60000,price:price});}
+  if(!ch.length){for(var j=59;j>=0;j--)ch.push({time:Date.now()-j*60000,open:price,close:price,high:price,low:price});}
+  return cleanFirestoreData({
+    id:String(s.id||('s'+Math.random().toString(36).slice(2,9))),
+    name:String(s.name||''),
+    type:String(s.type||'일반형'),
+    startPrice:Math.round(+s.startPrice||price),
+    currentPrice:price,
+    favorite:!!s.favorite,
+    priceHistory:ph,
+    candleHistory:ch,
+    updatedAt:Date.now()
+  });
+}
+function inflatePublicStockFull(s){
+  s=s||{};
+  var price=Math.round(+s.currentPrice||+s.startPrice||1000);
+  var out={
+    id:String(s.id||('s'+Math.random().toString(36).slice(2,9))),
+    name:String(s.name||''),
+    type:String(s.type||'일반형'),
+    startPrice:Math.round(+s.startPrice||price),
+    currentPrice:price,
+    favorite:!!s.favorite,
+    priceHistory:Array.isArray(s.priceHistory)?s.priceHistory:[],
+    candleHistory:Array.isArray(s.candleHistory)?s.candleHistory:[]
+  };
+  if(!out.priceHistory.length){for(var i=1439;i>=0;i--)out.priceHistory.push({time:Date.now()-i*60000,price:price});}
+  if(!out.candleHistory.length){for(var j=1439;j>=0;j--)out.candleHistory.push({time:Date.now()-j*60000,open:price,close:price,high:price,low:price});}
+  return out;
+}
+function normalizePublicStocks(arr){arr=(arr||[]).map(function(s){return inflatePublicStockFull(s)}).filter(function(s){return s&&s.name});return arr.slice().sort(stockNameCompare)}
+function publicConfigHasStocks(cfg){return !!(cfg&&Array.isArray(cfg.stocks)&&cfg.stocks.length>0)}
+function stripPublicDataForUserSave(data){
+  data=cloneData(data||{});
+  delete data.stocks;
+  delete data.newsTemplates;
+  delete data.newsEffectSettings;
+  delete data.bankProducts;
+  delete data.taxSettings;
+  delete data.bankSystem;
+  delete data.initialCash;
+  delete data.earnMin;
+  delete data.earnMax;
+  delete data.newsChance;
+  delete data.newsTickerSpeed;
+  return cleanFirestoreData(data);
+}
+function makeFirebasePayload(){
+  var data;try{syncCurrentPlayer();data=JSON.parse(JSON.stringify(state))}catch(e){data=JSON.parse(JSON.stringify(state||{}))}
+  return{profile:{uid:fbUser.uid,email:fbUser.email||'',displayName:fbUser.displayName||'',nickname:state.nickname||'',role:isAdmin?'admin':'user',updatedAt:firebase.firestore.FieldValue.serverTimestamp()},gameData:stripPublicDataForUserSave(data),updatedAt:firebase.firestore.FieldValue.serverTimestamp()}
+}
+function loadPublicStocksFromSubcollection(activeIds){
+  var r=publicConfigRefs();
+  return r.stocks.collection('items').get().then(function(q){
+    var arr=[];
+    q.forEach(function(doc){var d=doc.data()||{};d.id=d.id||doc.id;if(!activeIds||!activeIds.length||activeIds.indexOf(d.id)>=0)arr.push(d)});
+    return arr;
+  });
+}
+function savePublicStocksSplit(){
+  if(!fbEnabled||!fbUser||!fbDb||!isAdmin)return Promise.resolve();
+  var r=publicConfigRefs(),stocks=(state.stocks||[]).filter(function(s){return s&&s.name});
+  var activeIds=stocks.map(function(s){return String(s.id)});
+  return r.stocks.set({activeIds:activeIds,count:activeIds.length,updatedAt:Date.now()},{merge:true}).then(function(){
+    var batch=fbDb.batch();
+    stocks.forEach(function(s){batch.set(r.stocks.collection('items').doc(String(s.id)),compactPublicStockFull(s),{merge:true})});
+    return batch.commit();
+  });
+}
+function loadPublicConfig(){
+  if(!fbEnabled||!fbUser||!fbDb)return Promise.resolve();
+  var localStocksBackup=cloneData(state.stocks||[]),r=publicConfigRefs();
+  return Promise.all([r.stocks.get(),r.news.get(),r.bank.get(),r.basic.get()]).then(function(snaps){
+    var meta=snaps[0].exists?snaps[0].data():null;
+    var pieces={stocks:null,news:snaps[1].exists?snaps[1].data():null,bank:snaps[2].exists?snaps[2].data():null,basic:snaps[3].exists?snaps[3].data():null};
+    return loadPublicStocksFromSubcollection(meta&&meta.activeIds).then(function(stockDocs){
+      // 구버전 단일문서 stocks도 혹시 있으면 같이 지원
+      if((!stockDocs||!stockDocs.length)&&meta&&Array.isArray(meta.stocks))stockDocs=meta.stocks;
+      if(stockDocs&&stockDocs.length)pieces.stocks={stocks:stockDocs};
+      if(isAdmin&&(!pieces.stocks||!pieces.stocks.stocks||!pieces.stocks.stocks.length)&&localStocksBackup&&localStocksBackup.length){
+        state.stocks=normalizePublicStocks(localStocksBackup);
+        applyPublicPieces({news:pieces.news,bank:pieces.bank,basic:pieces.basic});
+        return savePublicConfigNow();
+      }
+      applyPublicPieces(pieces);
+      if(isAdmin&&(!pieces.news||!pieces.bank||!pieces.basic))return savePublicConfigNow();
+    });
+  }).catch(function(e){console.warn('public config load failed',e);msg('공용 설정 불러오기 실패')})
+}
+function savePublicConfigNow(){
+  if(!fbEnabled||!fbUser||!fbDb||!isAdmin)return Promise.resolve();
+  var r=publicConfigRefs();
+  return Promise.all([
+    savePublicStocksSplit(),
+    r.news.set(makePublicNewsPayload(),{merge:true}),
+    r.bank.set(makePublicBankPayload(),{merge:true}),
+    r.basic.set(makePublicBasicPayload(),{merge:true})
+  ]).catch(function(e){console.warn('public config save failed',e);msg('공용 설정 저장 실패')})
+}
+// draw 중에 빈 화면으로 멈추지 않도록 오류를 한 화면 단위로 막음
+function safeCall(fn){try{fn&&fn()}catch(e){console.warn('draw part failed',e)}}
+function draw(){
+  if(!state)state=load();
+  if(fbEnabled&&!fbUser){$('join').style.display='flex';$('main').style.display='none';applyAdminVisibility();setAuthStatus('Google 로그인이 필요합니다.');return}
+  if(fbEnabled&&fbUser&&!fbDataReady){$('join').style.display='flex';$('main').style.display='none';applyAdminVisibility();setAuthStatus('데이터 불러오는 중...');return}
+  $('join').style.display=state.joined?'none':'flex';$('main').style.display=state.joined?'block':'none';applyAdminVisibility();if(!state.joined)return;
+  syncCurrentPlayer();safeCall(function(){applyDailyTaxes()});safeCall(function(){applyBankAccountInterest(Date.now())});safeCall(ensureMaturityMails);safeCall(function(){ensureShop(state)});safeCall(drawBottomStatus);safeCall(updateMailboxIndicators);safeCall(function(){checkAssetRewards()});safeCall(drawMyInfo);safeCall(drawHold);safeCall(drawStocks);safeCall(drawNews);safeCall(drawTicker);safeCall(drawBank);safeCall(drawRank);safeCall(drawShop);safeCall(drawSettings);safeCall(drawJoinManage);safeCall(drawManage);safeCall(drawNewsManage);safeCall(drawBankManage);safeCall(drawLevelManage);safeCall(earnText);save();
+}
+
 state=load();catchUpOffline();if(state.joined)dailyLoginExp();bind();draw();initFirebaseAuth();switchInfoSub(infoSub);switchBankSub(bankSub);switchManageSub(manageSub);updateChartTimer();updateSavingTimers();updateLoanTimers();setInterval(earnText,1000);setInterval(updateChartTimer,1000);setInterval(updateSavingTimers,1000);setInterval(updateLoanTimers,1000);setInterval(updateBankAccountTimer,1000);scheduleNextTick();
 })();
 </script>
