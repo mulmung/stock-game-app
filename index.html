@@ -782,7 +782,99 @@
 .auth-status{margin-top:10px;font-size:12px;font-weight:900;color:#fff;text-align:center;line-height:1.35}
 .admin-hidden{display:none!important}
 
-.join-count{padding:12px 18px;font-size:13px;font-weight:950;color:var(--deep);border-bottom:1px solid var(--line);background:#fff}.join-admin{display:inline-flex;align-items:center;margin-left:6px;padding:2px 6px;background:#eaf2ff;color:var(--deep);font-size:10px;font-weight:950;border:1px solid #cfe0fb}</style>
+.join-count{padding:12px 18px;font-size:13px;font-weight:950;color:var(--deep);border-bottom:1px solid var(--line);background:#fff}.join-admin{display:inline-flex;align-items:center;margin-left:6px;padding:2px 6px;background:#eaf2ff;color:var(--deep);font-size:10px;font-weight:950;border:1px solid #cfe0fb}
+
+/* v155 - 은행 금고 내역 필터/내역 UI 정리 */
+.bank-vault-filter{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  margin:8px 0 12px;
+}
+.bank-vault-filter-btn{
+  height:38px;
+  border-radius:0;
+  background:#fff;
+  color:#526174;
+  border:1px solid var(--line);
+  font-size:13px;
+  font-weight:950;
+  letter-spacing:-.4px;
+}
+.bank-vault-filter-btn.on{
+  background:var(--blue);
+  border-color:var(--blue);
+  color:#fff;
+}
+.bank-vault-log-list{
+  background:#fff;
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+}
+.bank-vault-log-row{
+  border-bottom:1px solid var(--line);
+  padding:14px 18px 13px;
+}
+.bank-vault-log-row:last-child{border-bottom:0}
+.bank-vault-log-top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:8px;
+}
+.bank-vault-log-title{
+  min-width:0;
+  font-size:15px;
+  line-height:1.25;
+  font-weight:950;
+  color:var(--text);
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.bank-vault-log-amount{
+  flex:0 0 auto;
+  text-align:right;
+  font-size:16px;
+  line-height:1.2;
+  font-weight:950;
+  white-space:nowrap;
+  letter-spacing:-.45px;
+}
+.bank-vault-log-amount.plus{color:var(--blue)}
+.bank-vault-log-amount.minus{color:var(--red)}
+.bank-vault-log-amount.zero{color:var(--muted)}
+.bank-vault-log-user{
+  font-size:13px;
+  font-weight:950;
+  color:#6c7c92;
+  margin-bottom:4px;
+}
+.bank-vault-log-date{
+  font-size:12px;
+  font-weight:900;
+  color:var(--muted);
+  margin-bottom:8px;
+}
+.bank-vault-log-balance{
+  font-size:14px;
+  line-height:1.3;
+  font-weight:950;
+  color:var(--text);
+  letter-spacing:-.55px;
+  white-space:nowrap;
+}
+@media (max-width:380px){
+  .bank-vault-filter{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+  .bank-vault-filter-btn{font-size:12px;height:36px}
+  .bank-vault-log-row{padding-left:16px;padding-right:16px}
+  .bank-vault-log-title{font-size:14px}
+  .bank-vault-log-amount{font-size:15px}
+  .bank-vault-log-balance{font-size:13px;letter-spacing:-.7px}
+}
+
+</style>
 </head>
 <body>
 <div class="app">
@@ -1090,7 +1182,7 @@ function bankStatusContentHtml(){var html=bankSummaryHtml()+bankFilterHtml(),sho
 function drawBankStatus(){var b=$('bankStatus');if(b)b.innerHTML=bankStatusContentHtml();var ib=$('infoBankList');if(ib)ib.innerHTML=bankStatusContentHtml()}
 function drawBankSavings(){var b=$('bankSavingsList');if(!b)return;var html='<div class="section-title">적금 상품</div>';(state.bankProducts.savings||[]).forEach(function(p){html+='<div class="bank-product"><div><div class="bank-product-title">'+esc(p.name)+'</div><div class="bank-sub">기한 '+savingHours(p)+'시간 / 이자율 '+effectiveSavingRate(p.rate)+'% / 금액 자유 입력</div></div><div class="bank-actions"><button class="table-btn" data-joinsaving="'+p.id+'">가입</button></div></div>'});html+='<div class="section-title">가입 중인 적금</div>';if(!(state.bankSavings||[]).length)html+='<div class="empty">가입 중인 적금이 없어요.</div>';else state.bankSavings.forEach(function(sv){html+=savingActiveHtml(sv)});b.innerHTML=html}
 function drawBankLoans(){var b=$('bankLoansList');if(!b)return;var html='<div class="section-title">대출 상품</div>';(state.bankProducts.loans||[]).forEach(function(p){html+='<div class="bank-product"><div><div class="bank-product-title">'+esc(p.name)+'</div><div class="bank-sub">상환 '+p.days+'일 / 이자율 '+effectiveLoanRate(p.rate)+'% / 연체 '+effectiveOverdueRate(p.overdueRate)+'%/일 / 금액 자유 입력</div></div><div class="bank-actions"><button class="table-btn" data-takeloan="'+p.id+'">대출</button></div></div>'});html+='<div class="section-title">진행 중인 대출</div>';if(!(state.bankLoans||[]).length)html+='<div class="empty">진행 중인 대출이 없어요.</div>';else state.bankLoans.forEach(function(ln){html+=loanActiveHtml(ln)});b.innerHTML=html}
-function bankVaultLogsHtml(){var filters=[['all','전체'],['account','입출금'],['saving','적금'],['loan','대출'],['tax','세금'],['interest','이자'],['recalc','정산']];var list=(bankVaultLogs||[]).filter(function(x){return bankVaultLogFilter==='all'||x.group===bankVaultLogFilter});var per=5,total=Math.max(1,Math.ceil(list.length/per));if(bankVaultLogPage>total)bankVaultLogPage=total;var start=(bankVaultLogPage-1)*per,rows=list.slice(start,start+per);var html='<div class="section-head" style="margin-top:14px"><div class="section-title">은행 금고 내역</div><button class="small-gray" data-bankvaultlogrefresh="1">새로고침</button></div><div class="mini-tabs" style="margin:8px 0 10px">';filters.forEach(function(f){html+='<button class="mini-tab '+(bankVaultLogFilter===f[0]?'on':'')+'" data-bankvaultlogfilter="'+f[0]+'">'+f[1]+'</button>'});html+='</div>';if(!rows.length){html+='<div class="empty">은행 금고 내역이 없어요.</div>';return html}html+='<div class="line-table">';rows.forEach(function(l){var sign=(+l.amount||0)>0?'+':'';html+='<div class="line-row"><div class="line-label"><b>'+esc(l.title||'은행 금고 변동')+'</b><br><span class="muted">'+dateText(l.createdAtMs||Date.now())+' · '+esc(l.nickname||'익명')+'</span></div><div class="line-value">'+sign+won(l.amount||0)+'<br><span class="muted">'+won(l.beforeTotalBankAssets||0)+' → '+won(l.afterTotalBankAssets||0)+'</span></div></div>'});html+='</div>';if(total>1){html+='<div class="pager" style="margin-top:10px">';if(bankVaultLogPage>1)html+='<button data-bankvaultlogpage="'+(bankVaultLogPage-1)+'">‹</button>';for(var i=1;i<=total;i++){html+='<button class="'+(i===bankVaultLogPage?'on':'')+'" data-bankvaultlogpage="'+i+'">'+i+'</button>'}if(bankVaultLogPage<total)html+='<button data-bankvaultlogpage="'+(bankVaultLogPage+1)+'">›</button>';html+='</div>'}return html}
+function bankVaultLogsHtml(){var filters=[['all','전체'],['account','입출금'],['saving','적금'],['loan','대출'],['tax','세금'],['interest','이자'],['recalc','정산']];var list=(bankVaultLogs||[]).filter(function(x){return bankVaultLogFilter==='all'||x.group===bankVaultLogFilter});var per=5,total=Math.max(1,Math.ceil(list.length/per));if(bankVaultLogPage>total)bankVaultLogPage=total;var start=(bankVaultLogPage-1)*per,rows=list.slice(start,start+per);var html='<div class="section-head" style="margin-top:14px"><div class="section-title">은행 금고 내역</div><button class="small-gray" data-bankvaultlogrefresh="1">새로고침</button></div><div class="bank-vault-filter">';filters.forEach(function(f){html+='<button class="bank-vault-filter-btn '+(bankVaultLogFilter===f[0]?'on':'')+'" data-bankvaultlogfilter="'+f[0]+'">'+f[1]+'</button>'});html+='</div>';if(!rows.length){html+='<div class="empty">은행 금고 내역이 없어요.</div>';return html}html+='<div class="bank-vault-log-list">';rows.forEach(function(l){var amount=Math.round(+l.amount||0);var sign=amount>0?'+':'';var amountClass=amount>0?'plus':(amount<0?'minus':'zero');html+='<div class="bank-vault-log-row"><div class="bank-vault-log-top"><div class="bank-vault-log-title">'+esc(l.title||'은행 금고 변동')+'</div><div class="bank-vault-log-amount '+amountClass+'">'+sign+won(amount)+'</div></div><div class="bank-vault-log-user">'+esc(l.nickname||'익명')+'</div><div class="bank-vault-log-date">'+dateText(l.createdAtMs||Date.now())+'</div><div class="bank-vault-log-balance">'+won(l.beforeTotalBankAssets||0)+' → '+won(l.afterTotalBankAssets||0)+'</div></div>'});html+='</div>';if(total>1){html+='<div class="pager" style="margin-top:10px">';if(bankVaultLogPage>1)html+='<button data-bankvaultlogpage="'+(bankVaultLogPage-1)+'">‹</button>';for(var i=1;i<=total;i++){html+='<button class="'+(i===bankVaultLogPage?'on':'')+'" data-bankvaultlogpage="'+i+'">'+i+'</button>'}if(bankVaultLogPage<total)html+='<button data-bankvaultlogpage="'+(bankVaultLogPage+1)+'">›</button>';html+='</div>'}return html}
 function drawBankManage(){var b=$('bankManageList');if(!b)return;var bs=state.bankSystem,tx=state.taxSettings;var html='<div class="section-head"><div class="section-title">은행 기본 설정</div><button class="small-gray" data-banksetting="1">수정</button></div><div class="line-table"><div class="line-row"><div class="line-label">은행 초기 자본</div><div class="line-value">'+won(bs.initialCapital)+'</div></div><div class="line-row"><div class="line-label">안전 준비금 비율</div><div class="line-value">'+bs.reserveRate+'%</div></div><div class="line-row"><div class="line-label">예치금 보호 비율</div><div class="line-value">'+((bs.depositProtectRate===undefined?80:bs.depositProtectRate))+'%</div></div></div><div class="section-head" style="margin-top:14px"><div class="section-title">세금 설정</div><button class="small-gray" data-taxsetting="1">수정</button></div><div class="line-table"><div class="line-row"><div class="line-label">일일 자산세</div><div class="line-value">'+tx.dailyAssetTaxRate+'%</div></div><div class="line-row"><div class="line-label">매수세</div><div class="line-value">'+tx.buyTaxRate+'%</div></div><div class="line-row"><div class="line-label">매도세</div><div class="line-value">'+tx.sellTaxRate+'%</div></div><div class="line-row"><div class="line-label">세금 적용 시간</div><div class="line-value">매일 00:00</div></div></div>';html+='<div class="section-head" style="margin-top:14px"><div class="section-title">통장 설정</div><button class="small-gray" data-accountsetting="1">수정</button></div><div class="line-table"><div class="line-row"><div class="line-label">이자 지급 주기</div><div class="line-value">'+bankAccountIntervalMinutes()+'분</div></div><div class="line-row"><div class="line-label">현재 통장 이자</div><div class="line-value">'+bankAccountInterestRate()+'%</div></div></div>';html+='<div class="section-head" style="margin-top:14px"><div class="section-title">적금 상품 관리</div><button class="small-blue" data-banksaveprod="saving-new">+ 적금 추가</button></div><div class="bank-table"><div class="bank-row head"><div>상품명</div><div>기한</div><div>이자율</div><div></div><div></div><div></div></div>';(state.bankProducts.savings||[]).forEach(function(p){html+='<div class="bank-row"><div>'+esc(p.name)+'</div><div>'+savingHours(p)+'시간</div><div>'+p.rate+'%</div><div></div><button class="table-btn" data-editbankprod="saving:'+p.id+'">수정</button><button class="table-btn danger" data-delbankprod="saving:'+p.id+'">삭제</button></div>'});html+='</div><div class="section-head" style="margin-top:14px"><div class="section-title">대출 상품 관리</div><button class="small-blue" data-banksaveprod="loan-new">+ 대출 추가</button></div><div class="bank-table"><div class="bank-row loan head"><div>상품명</div><div>기한</div><div>이자율</div><div>연체</div><div></div><div></div><div></div></div>';(state.bankProducts.loans||[]).forEach(function(p){html+='<div class="bank-row loan"><div>'+esc(p.name)+'</div><div>'+p.days+'일</div><div>'+p.rate+'%</div><div>'+p.overdueRate+'%/일</div><div></div><button class="table-btn" data-editbankprod="loan:'+p.id+'">수정</button><button class="table-btn danger" data-delbankprod="loan:'+p.id+'">삭제</button></div>'});html+='</div>';html+='<div class="section-head" style="margin-top:14px"><div class="section-title">은행 금고 정산</div><button class="small-blue" data-recalcbankvault="1">재계산</button></div><div class="line-table"><div class="line-row"><div class="line-label">정산 기준</div><div class="line-value">전체 유저 통장/적금/대출</div></div><div class="line-row"><div class="line-label">유지 항목</div><div class="line-value">세금·대출이자·지급이자</div></div><div class="line-row"><div class="line-label">최근 정산</div><div class="line-value">'+(state.bankVault&&state.bankVault.lastRecalculatedAtMs?dateText(state.bankVault.lastRecalculatedAtMs):'없음')+'</div></div></div>';html+=bankVaultLogsHtml();b.innerHTML=html}
 
 function drawLevelManage(){var b=$('levelManageList');if(!b)return;b.innerHTML='<div class="level-guide"><div class="level-guide-row"><div class="level-guide-label">레벨 구조</div><div class="level-guide-value">레벨은 무한 성장 업적입니다. 보너스는 승급에서 적용됩니다.</div></div><div class="level-guide-row"><div class="level-guide-label">레벨업 공식</div><div class="level-guide-value">현재 레벨 × 100 EXP</div></div><div class="level-guide-row"><div class="level-guide-label">진급 방식</div><div class="level-guide-value">진급은 내 정보 화면에서 진행합니다. 관리 화면에서는 승급표와 기준만 확인합니다.</div></div></div><div class="level-section-title">EXP 획득 기준</div><div class="level-guide"><div class="level-guide-row"><div class="level-guide-label">거래 EXP</div><div class="level-guide-value">거래금액 10,000원당 1 EXP</div></div><div class="level-guide-row"><div class="level-guide-label">수익 실현 EXP</div><div class="level-guide-value">실현수익 1,000원당 1 EXP</div></div><div class="level-guide-row"><div class="level-guide-label">적금 만기 EXP</div><div class="level-guide-value">만기수령액 10,000원당 1 EXP</div></div><div class="level-guide-row"><div class="level-guide-label">대출 정상상환 EXP</div><div class="level-guide-value">상환금액 10,000원당 1 EXP</div></div><div class="level-guide-row"><div class="level-guide-label">돈벌기 EXP</div><div class="level-guide-value">1회 10 EXP</div></div><div class="level-guide-row"><div class="level-guide-label">하루 첫 접속</div><div class="level-guide-value">하루 1회 50 EXP</div></div></div><div class="level-section-title">전체 승급표</div>'+levelTableHtml()}function drawSettings(){var b=$('settingTable');if(!b)return;if(!settingsSub)settingsSub='basic';var editBtn=$('editSetBtn');if(editBtn)editBtn.style.display='none';var head=document.querySelector('#manageSettingsPanel .section-head');if(head)head.style.display='none';var tabs='<div class="settings-sub-tabs"><button type="button" class="settings-sub-btn '+(settingsSub==='basic'?'on':'')+'" data-settingssub="basic">기본 설정</button><button type="button" class="settings-sub-btn '+(settingsSub==='notice'?'on':'')+'" data-settingssub="notice">알림 관리</button><button type="button" class="settings-sub-btn '+(settingsSub==='data'?'on':'')+'" data-settingssub="data">데이터 관리</button></div>';var html='';if(settingsSub==='basic'){html='<div class="settings-edit-row"><button type="button" class="settings-inline-edit" data-settingsmodal="1">수정</button></div><div class="settings-sub-panel"><div class="line-row"><div class="line-label">초기 자금</div><div class="line-value">'+won(state.initialCash)+'</div></div><div class="line-row"><div class="line-label">돈벌기 최소</div><div class="line-value">'+won(state.earnMin)+'</div></div><div class="line-row"><div class="line-label">돈벌기 최대</div><div class="line-value">'+won(state.earnMax)+'</div></div></div>'}else if(settingsSub==='notice'){html='<div class="settings-sub-panel"><div class="notice-manage-box"><div class="notice-manage-desc">유저들에게 업데이트 안내나 선물을 우편함으로 발송할 수 있어요.</div><button class="notice-write-btn" data-notificationwrite="1">작성하기</button></div></div>'+notificationHistoryHtml()}else{html='<div class="settings-sub-panel"><div class="data-manage-box"><div class="data-manage-desc">저장된 게임 데이터를 파일로 백업하거나, 백업 파일을 불러와 현재 데이터로 복원할 수 있어요.</div><div class="data-manage-actions"><button class="data-backup-btn" data-backup="1">데이터 백업</button><button class="data-import-btn" data-import="1">데이터 불러오기</button></div></div></div>'}b.innerHTML=tabs+html}function drawRank(){var b=$('rankList');if(!b)return;syncCurrentPlayer();var arr=[];if(fbEnabled&&fbUser){if(state&&state.joined)upsertPublicRankingLocal(currentRankingSnapshot());arr=(publicRankings||[]).slice().sort(function(a,b){return(+b.totalAsset||0)-(+a.totalAsset||0)});if(!arr.length&&!publicRankingsLoaded){b.innerHTML='<div class="empty">순위 불러오는 중...</div>';return}}else{arr=(state.players||[]).slice().map(function(u){ensureLevel(u);return{nickname:u.nickname,title:promotionTitle(u),level:u.level||1,totalAsset:playerAsset(u)}}).sort(function(a,b){return b.totalAsset-a.totalAsset})}if(!arr.length){b.innerHTML='<div class="empty">가입자가 없어요.</div>';return}b.innerHTML='<div class="rank-row rank-head"><div>순위</div><div>닉네임</div><div style="text-align:center">레벨</div><div style="text-align:right">총 자산</div></div>'+arr.map(function(u,i){return '<div class="rank-row"><div class="rank-pos">'+(i+1)+'위</div><div><div class="rank-name">'+esc(u.nickname||'-')+'</div><div class="join-sub">'+esc(u.title||'스톤')+'</div></div><div class="rank-level">Lv.'+(u.level||1)+'</div><div class="rank-asset">'+won(u.totalAsset||0)+'</div></div>'}).join('')}
